@@ -43,7 +43,10 @@ const Admin = () => {
     if (!code) {
       toast.error("يرجى إدخال كود المنتج أولاً");
       return;
-    }
+    } 
+    const formattedCode =
+            productCode.trim().startwith('#') ?
+            productCode.trim() : '#${productCode.trim()}';
 
     try {
       const { error } = await supabase
