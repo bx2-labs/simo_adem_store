@@ -47,7 +47,7 @@ const Admin = () => {
 
     try {
       const { error } = await supabase
-        .from('orders' as any)
+        .from('orders')
         .update({ status: newStatus })
         .eq('productCode', code.trim());
 
