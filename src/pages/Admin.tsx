@@ -38,39 +38,40 @@ const Admin = () => {
   const [price, setPrice] = useState("");
   const [productCode, setProductCode] = useState("");
 
-  // الدالة المصححة والنهائية لتحديث حالة الطلب
+  // الدالة النهائية للإضافة والتعديل (Upsert) مع عمود النص
   const updateOrderStatus = async (code: string, newStatus: string) => {
     if (!code) {
       toast.error("يرجى إدخال كود المنتج أولاً");
       return;
     } 
 
-    // إضافة الهاشتاق تلقائياً إذا نسيه الأدمن
     const formattedCode = code.trim().startsWith('#') 
       ? code.trim() 
       : `#${code.trim()}`;
 
     try {
+      // بما أن العمود هو TEXT، الـ upsert ستبحث عن تطابق النص
       const { data, error } = await supabase
         .from('orders')
-        .update({ status: newStatus })
-        .eq('productCode', formattedCode)
+        .upsert(
+          { 
+            productCode: formattedCode, 
+            status: newStatus 
+          }, 
+          { onConflict: 'productCode' } // تأكد أن هذا العمود هو Unique في سوباباز
+        )
         .select();
 
       if (error) throw error;
 
-      if (data && data.length > 0) {
-        toast.success("تم تحديث حالة الطلب بنجاح! ✅");
-        setOrderDialogOpen(false);
-        setTargetCode("");
-        // تحديث البيانات في الخلفية
-        queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-      } else {
-        toast.error("لم يتم العثور على طلب بهذا الكود في قاعدة البيانات");
-      }
+      toast.success("تم تسجيل الكود بنجاح في الداتابيز! ✅");
+      setOrderDialogOpen(false);
+      setTargetCode("");
+      
     } catch (error: any) {
-      console.error("Update error:", error);
-      toast.error("حدث خطأ: تأكد من صلاحيات UPDATE في سوباباز");
+      console.error("Upsert error:", error);
+      // إذا خرج لك خطأ هنا، نفذ أمر SQL لجعل العمود Unique
+      toast.error("خطأ: تأكد من صلاحيات الـ SQL أو أن الكود فريد");
     }
   };
 
@@ -188,7 +189,7 @@ const Admin = () => {
 
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground bg-background">
         <div className="animate-float">
           <Sparkles className="h-8 w-8 text-primary/40" />
         </div>
@@ -197,133 +198,76 @@ const Admin = () => {
   if (!session) return null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <motion.header
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        className="border-b border-border"
-      >
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b border-border bg-card/30 backdrop-blur-md sticky top-0 z-10">
         <div className="mx-auto max-w-4xl px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            <h1 className="text-2xl">Aeterna Shop Admin</h1>
+            <h1 className="text-xl font-bold">Aeterna Admin</h1>
           </div>
           <div className="flex items-center gap-3">
-            <Button size="sm" onClick={openAdd} className="transition-all duration-300 hover:shadow-lg hover:shadow-primary/25">
+            <Button size="sm" onClick={openAdd}>
               <Plus className="h-4 w-4 mr-1" /> Add Product
             </Button>
             <Button 
               size="sm" 
               variant="outline" 
               onClick={() => setOrderDialogOpen(true)}
-              className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+              className="border-purple-500/50 text-purple-400"
             >
-              Update Order Status 📦
+              Add/Update Order 📦
             </Button>
             <Button size="sm" variant="ghost" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
         </div>
-      </motion.header>
+      </header>
 
       <main className="mx-auto max-w-4xl px-6 py-8">
         {products && products.length > 0 ? (
           <div className="space-y-3">
-            {products.map((product, index) => (
-              <motion.div
-                key={product.id}
-                initial={{ x: -20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: index * 0.05, duration: 0.4 }}
-                className="flex items-center gap-4 p-4 border border-border rounded-lg hover:border-primary/30 transition-all duration-300"
-              >
-                <div className="h-14 w-14 rounded-lg overflow-hidden bg-muted shrink-0">
-                  {product.image_url ? (
-                    <img src={product.image_url} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center text-primary/20 text-xl">✦</div>
-                  )}
+            {products.map((product) => (
+              <div key={product.id} className="flex items-center gap-4 p-4 border border-border rounded-xl bg-card group">
+                <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0 border border-border">
+                  {product.image_url && <img src={product.image_url} alt="" className="h-full w-full object-cover" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{product.title}</p>
-                  <p className="text-muted-foreground text-xs">
-                    {product.product_code} · {product.price.toFixed(0)} DA
-                  </p>
+                  <p className="font-semibold text-base truncate">{product.title}</p>
+                  <p className="text-muted-foreground text-sm font-mono">{product.product_code}</p>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button size="icon" variant="ghost" onClick={() => openEdit(product)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => deleteMutation.mutate(product.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                <div className="flex items-center gap-2">
+                  <Button size="icon" variant="ghost" onClick={() => openEdit(product)}><Pencil className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={() => deleteMutation.mutate(product.id)}><Trash2 className="h-4 w-4" /></Button>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         ) : (
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center text-muted-foreground py-16"
-          >
-            No products yet. Add your first one!
-          </motion.p>
+          <div className="text-center py-20 border border-dashed border-border rounded-2xl">
+             <p className="text-muted-foreground italic">No products yet.</p>
+          </div>
         )}
       </main>
 
       {/* Dialog إضافة/تعديل المنتجات */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editingProduct ? "Edit Product" : "Add Product"}</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-md bg-card">
+          <DialogHeader><DialogTitle>{editingProduct ? "Edit Product" : "Add Product"}</DialogTitle></DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); saveMutation.mutate(); }} className="space-y-4">
             <div className="space-y-2">
               <Label>Title</Label>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
             </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Price (DA)</Label>
-                <Input type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} required />
+                <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} required />
               </div>
               <div className="space-y-2">
                 <Label>Product Code</Label>
-                <div className="flex gap-2">
-                  <Input 
-                    value={productCode} 
-                    onChange={(e) => setProductCode(e.target.value)} 
-                    placeholder="#A4DF" 
-                    className="flex-1"
-                  />
-                  <Button 
-                    type="button" 
-                    onClick={() => {
-                      const chars = 'ABCDE123456789';
-                      let result = '';
-                      for (let i = 0; i < 3; i++) {
-                        result += chars.charAt(Math.floor(Math.random() * chars.length));
-                      }
-                      const timePart = Date.now().toString(36).slice(-2).toUpperCase();
-                      setProductCode(`#${result}${timePart}`);
-                    }}
-                    className="bg-purple-600 hover:bg-purple-700 text-white shrink-0"
-                  >
-                    توليد ⚡
-                  </Button>
-                </div>
+                <Input value={productCode} onChange={(e) => setProductCode(e.target.value)} />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Image</Label>
-              <Input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
             </div>
             <Button type="submit" className="w-full" disabled={saveMutation.isPending}>
               {saveMutation.isPending ? "Saving..." : "Save Product"}
@@ -332,42 +276,34 @@ const Admin = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog تحديث حالة الطلبات */}
+      {/* Dialog إدارة الطلبات */}
       <Dialog open={orderDialogOpen} onOpenChange={setOrderDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>تحديث حالة الطلب</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
+        <DialogContent className="bg-card">
+          <DialogHeader><DialogTitle>إضافة كود طلب جديد</DialogTitle></DialogHeader>
+          <div className="space-y-5 py-4">
             <div className="space-y-2">
-              <Label>كود المنتج المُراد تحديثه</Label>
+              <Label>كود المنتج (Text)</Label>
               <Input 
-                placeholder="مثلاً: #46305" 
+                placeholder="#12345" 
                 value={targetCode}
                 onChange={(e) => setTargetCode(e.target.value)}
+                className="font-mono"
               />
             </div>
-
             <div className="space-y-2">
-              <Label>اختر الحالة الجديدة</Label>
+              <Label>الحالة</Label>
               <select 
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground"
+                className="w-full h-11 px-3 rounded-md border border-input bg-background"
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
               >
                 <option value="قيد المعالجة ⏳">قيد المعالجة ⏳</option>
                 <option value="تم الشحن 🚚">تم الشحن 🚚</option>
-                <option value="وصل لمركز التوزيع 📦">وصل لمركز التوزيع 📦</option>
                 <option value="تم التوصيل بنجاح ✅">تم التوصيل بنجاح ✅</option>
               </select>
             </div>
-
-            <Button 
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/20"
-              onClick={() => updateOrderStatus(targetCode, selectedStatus)}
-            >
-              حفظ الحالة في الداتابيز
+            <Button className="w-full bg-purple-600 hover:bg-purple-700" onClick={() => updateOrderStatus(targetCode, selectedStatus)}>
+              حفظ في قاعدة البيانات
             </Button>
           </div>
         </DialogContent>
