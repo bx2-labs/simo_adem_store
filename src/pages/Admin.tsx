@@ -38,29 +38,36 @@ const Admin = () => {
   const [price, setPrice] = useState("");
   const [productCode, setProductCode] = useState("");
 
-  // الدالة المصححة لتحديث حالة الطلب
+  // الدالة المصححة والنهائية لتحديث حالة الطلب
   const updateOrderStatus = async (code: string, newStatus: string) => {
     if (!code) {
       toast.error("يرجى إدخال كود المنتج أولاً");
       return;
     } 
-    const formattedCode =
-            productCode.trim().startwith('#') ?
-            productCode.trim() : '#${productCode.trim()}';
+
+    // إضافة الهاشتاق تلقائياً إذا نسيه الأدمن
+    const formattedCode = code.trim().startsWith('#') 
+      ? code.trim() 
+      : `#${code.trim()}`;
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('orders')
         .update({ status: newStatus })
-        .eq('productCode', code.trim());
+        .eq('productCode', formattedCode)
+        .select();
 
       if (error) throw error;
 
-      toast.success("تم تحديث حالة الطلب بنجاح! ✅");
-      setOrderDialogOpen(false);
-      setTargetCode("");
-      // تحديث البيانات في الخلفية
-      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      if (data && data.length > 0) {
+        toast.success("تم تحديث حالة الطلب بنجاح! ✅");
+        setOrderDialogOpen(false);
+        setTargetCode("");
+        // تحديث البيانات في الخلفية
+        queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      } else {
+        toast.error("لم يتم العثور على طلب بهذا الكود في قاعدة البيانات");
+      }
     } catch (error: any) {
       console.error("Update error:", error);
       toast.error("حدث خطأ: تأكد من صلاحيات UPDATE في سوباباز");
@@ -200,11 +207,11 @@ const Admin = () => {
         <div className="mx-auto max-w-4xl px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            <h1 className="text-2xl">Products</h1>
+            <h1 className="text-2xl">Aeterna Shop Admin</h1>
           </div>
           <div className="flex items-center gap-3">
             <Button size="sm" onClick={openAdd} className="transition-all duration-300 hover:shadow-lg hover:shadow-primary/25">
-              <Plus className="h-4 w-4 mr-1" /> Add
+              <Plus className="h-4 w-4 mr-1" /> Add Product
             </Button>
             <Button 
               size="sm" 
@@ -212,7 +219,7 @@ const Admin = () => {
               onClick={() => setOrderDialogOpen(true)}
               className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
             >
-              Orders 📦
+              Update Order Status 📦
             </Button>
             <Button size="sm" variant="ghost" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
@@ -230,7 +237,7 @@ const Admin = () => {
                 initial={{ x: -20, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ delay: index * 0.05, duration: 0.4 }}
-                className="flex items-center gap-4 p-4 border border-border rounded-lg hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 transition-all duration-300"
+                className="flex items-center gap-4 p-4 border border-border rounded-lg hover:border-primary/30 transition-all duration-300"
               >
                 <div className="h-14 w-14 rounded-lg overflow-hidden bg-muted shrink-0">
                   {product.image_url ? (
@@ -242,7 +249,7 @@ const Admin = () => {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-sm truncate">{product.title}</p>
                   <p className="text-muted-foreground text-xs">
-                    {product.product_code} · ${product.price.toFixed(2)}
+                    {product.product_code} · {product.price.toFixed(0)} DA
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
@@ -284,8 +291,8 @@ const Admin = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Price</Label>
-                <Input type="number" step="0.01" min="0" value={price} onChange={(e) => setPrice(e.target.value)} required />
+                <Label>Price (DA)</Label>
+                <Input type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} required />
               </div>
               <div className="space-y-2">
                 <Label>Product Code</Label>
@@ -319,7 +326,7 @@ const Admin = () => {
               <Input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
             </div>
             <Button type="submit" className="w-full" disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? "Saving..." : "Save"}
+              {saveMutation.isPending ? "Saving..." : "Save Product"}
             </Button>
           </form>
         </DialogContent>
@@ -334,7 +341,7 @@ const Admin = () => {
           
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>كود المنتج</Label>
+              <Label>كود المنتج المُراد تحديثه</Label>
               <Input 
                 placeholder="مثلاً: #46305" 
                 value={targetCode}
@@ -343,7 +350,7 @@ const Admin = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>اختر الحالة</Label>
+              <Label>اختر الحالة الجديدة</Label>
               <select 
                 className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground"
                 value={selectedStatus}
@@ -357,10 +364,10 @@ const Admin = () => {
             </div>
 
             <Button 
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/20"
               onClick={() => updateOrderStatus(targetCode, selectedStatus)}
             >
-              حفظ الحالة
+              حفظ الحالة في الداتابيز
             </Button>
           </div>
         </DialogContent>
