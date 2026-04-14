@@ -26,29 +26,43 @@ const Admin = () => {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  
+  // States لتحديث الطلبات
   const [targetCode, setTargetCode] = useState(""); 
   const [selectedStatus, setSelectedStatus] = useState("قيد المعالجة ⏳");
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const updateOrderStatus = async (code: string, newStatus: string) => {
-  const { error } = await supabase
-    .from('orders')
-    .upsert(
-      { productCode: code, status: newStatus }, 
-      { onConflict: 'productCode' }
-    );
 
-  if (error) {
-    toast.error("حدث خطأ أثناء تحديث الحالة");
-  } else {
-    toast.success("تم تحديث حالة الطلب بنجاح!");
-    setOrderDialogOpen(false);
-    setTargetCode("");
-  }
-};
+  // States للمنتجات
+  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [productCode, setProductCode] = useState("");
+
+  // الدالة المصححة لتحديث حالة الطلب
+  const updateOrderStatus = async (code: string, newStatus: string) => {
+    if (!code) {
+      toast.error("يرجى إدخال كود المنتج أولاً");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('orders' as any)
+        .update({ status: newStatus })
+        .eq('productCode', code.trim());
+
+      if (error) throw error;
+
+      toast.success("تم تحديث حالة الطلب بنجاح! ✅");
+      setOrderDialogOpen(false);
+      setTargetCode("");
+      // تحديث البيانات في الخلفية
+      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+    } catch (error: any) {
+      console.error("Update error:", error);
+      toast.error("حدث خطأ: تأكد من صلاحيات UPDATE في سوباباز");
+    }
+  };
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -190,13 +204,13 @@ const Admin = () => {
               <Plus className="h-4 w-4 mr-1" /> Add
             </Button>
             <Button 
-  size="sm" 
-  variant="outline" 
-  onClick={() => setOrderDialogOpen(true)}
-  className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
->
-  Orders 📦
-</Button>
+              size="sm" 
+              variant="outline" 
+              onClick={() => setOrderDialogOpen(true)}
+              className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+            >
+              Orders 📦
+            </Button>
             <Button size="sm" variant="ghost" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
             </Button>
@@ -250,6 +264,7 @@ const Admin = () => {
         )}
       </main>
 
+      {/* Dialog إضافة/تعديل المنتجات */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -270,31 +285,31 @@ const Admin = () => {
                 <Input type="number" step="0.01" min="0" value={price} onChange={(e) => setPrice(e.target.value)} required />
               </div>
               <div className="space-y-2">
-  <Label>Product Code</Label>
-  <div className="flex gap-2">
-    <Input 
-      value={productCode} 
-      onChange={(e) => setProductCode(e.target.value)} 
-      placeholder="#A4DF" 
-      className="flex-1"
-    />
-    <Button 
-      type="button" 
-      onClick={() => {
-        const chars = 'ABCDE123456789';
-        let result = '';
-        for (let i = 0; i < 3; i++) {
-          result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        const timePart = Date.now().toString(36).slice(-2).toUpperCase();
-        setProductCode(`#${result}${timePart}`);
-      }}
-      className="bg-purple-600 hover:bg-purple-700 text-white shrink-0"
-    >
-      توليد ⚡
-    </Button>
-  </div>
-</div>
+                <Label>Product Code</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    value={productCode} 
+                    onChange={(e) => setProductCode(e.target.value)} 
+                    placeholder="#A4DF" 
+                    className="flex-1"
+                  />
+                  <Button 
+                    type="button" 
+                    onClick={() => {
+                      const chars = 'ABCDE123456789';
+                      let result = '';
+                      for (let i = 0; i < 3; i++) {
+                        result += chars.charAt(Math.floor(Math.random() * chars.length));
+                      }
+                      const timePart = Date.now().toString(36).slice(-2).toUpperCase();
+                      setProductCode(`#${result}${timePart}`);
+                    }}
+                    className="bg-purple-600 hover:bg-purple-700 text-white shrink-0"
+                  >
+                    توليد ⚡
+                  </Button>
+                </div>
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Image</Label>
@@ -306,49 +321,47 @@ const Admin = () => {
           </form>
         </DialogContent>
       </Dialog>
-      <Button onClick={() => setOrderDialogOpen(true)} variant="outline">
-  Orders 📦
-</Button>
 
-<Dialog open={orderDialogOpen} onOpenChange={setOrderDialogOpen}>
-  <DialogContent>
-    <DialogHeader>
-      <DialogTitle>تحديث حالة الطلب</DialogTitle>
-    </DialogHeader>
-    
-    <div className="space-y-4 py-4">
-      <div className="space-y-2">
-        <Label>كود المنتج</Label>
-        <Input 
-          placeholder="مثلاً: #A4DF" 
-          value={targetCode}
-          onChange={(e) => setTargetCode(e.target.value)}
-        />
-      </div>
+      {/* Dialog تحديث حالة الطلبات */}
+      <Dialog open={orderDialogOpen} onOpenChange={setOrderDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>تحديث حالة الطلب</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>كود المنتج</Label>
+              <Input 
+                placeholder="مثلاً: #46305" 
+                value={targetCode}
+                onChange={(e) => setTargetCode(e.target.value)}
+              />
+            </div>
 
-      <div className="space-y-2">
-        <Label>اختر الحالة</Label>
-        <select 
-          className="w-full h-10 px-3 rounded-md border border-input bg-background text-white"
-          value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value)}
-        >
-          <option value="قيد المعالجة ⏳">قيد المعالجة ⏳</option>
-          <option value="تم الشحن 🚚">تم الشحن 🚚</option>
-          <option value="وصل لمركز التوزيع 📦">وصل لمركز التوزيع 📦</option>
-          <option value="تم التوصيل بنجاح ✅">تم التوصيل بنجاح ✅</option>
-        </select>
-      </div>
+            <div className="space-y-2">
+              <Label>اختر الحالة</Label>
+              <select 
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground"
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+              >
+                <option value="قيد المعالجة ⏳">قيد المعالجة ⏳</option>
+                <option value="تم الشحن 🚚">تم الشحن 🚚</option>
+                <option value="وصل لمركز التوزيع 📦">وصل لمركز التوزيع 📦</option>
+                <option value="تم التوصيل بنجاح ✅">تم التوصيل بنجاح ✅</option>
+              </select>
+            </div>
 
-      <Button 
-        className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-        onClick={() => updateOrderStatus(targetCode, selectedStatus)}
-      >
-        حفظ الحالة
-      </Button>
-    </div>
-  </DialogContent>
-</Dialog>
+            <Button 
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+              onClick={() => updateOrderStatus(targetCode, selectedStatus)}
+            >
+              حفظ الحالة
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
