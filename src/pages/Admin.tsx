@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, LogOut, Sparkles } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, Sparkles, RefreshCcw } from "lucide-react";
 import { Session } from "@supabase/supabase-js";
 import { motion } from "framer-motion";
 
@@ -27,7 +27,6 @@ const Admin = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   
-  // States لتحديث الطلبات
   const [targetCode, setTargetCode] = useState(""); 
   const [selectedStatus, setSelectedStatus] = useState("قيد المعالجة ⏳");
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
@@ -38,7 +37,16 @@ const Admin = () => {
   const [price, setPrice] = useState("");
   const [productCode, setProductCode] = useState("");
 
-  // الدالة النهائية للإضافة والتعديل (Upsert) مع عمود النص
+  // دالة توليد كود عشوائي فريد (#75DQ)
+  const generateRandomCode = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let result = "#";
+    for (let i = 0; i < 4; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setProductCode(result);
+  };
+
   const updateOrderStatus = async (code: string, newStatus: string) => {
     if (!code) {
       toast.error("يرجى إدخال كود المنتج أولاً");
@@ -50,7 +58,6 @@ const Admin = () => {
       : `#${code.trim()}`;
 
     try {
-      // بما أن العمود هو TEXT، الـ upsert ستبحث عن تطابق النص
       const { data, error } = await supabase
         .from('orders')
         .upsert(
@@ -58,20 +65,17 @@ const Admin = () => {
             productCode: formattedCode, 
             status: newStatus 
           }, 
-          { onConflict: 'productCode' } // تأكد أن هذا العمود هو Unique في سوباباز
+          { onConflict: 'productCode' }
         )
         .select();
 
       if (error) throw error;
-
       toast.success("تم تسجيل الكود بنجاح في الداتابيز! ✅");
       setOrderDialogOpen(false);
       setTargetCode("");
-      
     } catch (error: any) {
       console.error("Upsert error:", error);
-      // إذا خرج لك خطأ هنا، نفذ أمر SQL لجعل العمود Unique
-      toast.error("خطأ: تأكد من صلاحيات الـ SQL أو أن الكود فريد");
+      toast.error("خطأ: تأكد من أن الكود فريد في جدول Orders");
     }
   };
 
@@ -119,13 +123,16 @@ const Admin = () => {
       if (imageFile) {
         imageUrl = await uploadImage(imageFile);
       }
+      
       const payload = {
         title,
         description: description || null,
         price: parseFloat(price),
         product_code: productCode,
         image_url: imageUrl,
+        // ملاحظة: أعمدة created_at و updated_at تدار تلقائياً بواسطة سوباباز (timestamptz)
       };
+
       if (editingProduct) {
         const { error } = await supabase.from("products").update(payload).eq("id", editingProduct.id);
         if (error) throw error;
@@ -137,7 +144,7 @@ const Admin = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-products"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      toast.success(editingProduct ? "Product updated!" : "Product added!");
+      toast.success(editingProduct ? "تم تحديث المنتج!" : "تم إضافة المنتج بنجاح!");
       closeDialog();
     },
     onError: (err: Error) => toast.error(err.message),
@@ -151,7 +158,7 @@ const Admin = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-products"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      toast.success("Product deleted!");
+      toast.success("تم حذف المنتج!");
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -161,7 +168,7 @@ const Admin = () => {
     setTitle("");
     setDescription("");
     setPrice("");
-    setProductCode("");
+    generateRandomCode(); // توليد الكود تلقائياً عند الفتح
     setImageFile(null);
     setDialogOpen(true);
   };
@@ -198,7 +205,7 @@ const Admin = () => {
   if (!session) return null;
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground font-sans">
       <header className="border-b border-border bg-card/30 backdrop-blur-md sticky top-0 z-10">
         <div className="mx-auto max-w-4xl px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -253,24 +260,42 @@ const Admin = () => {
       {/* Dialog إضافة/تعديل المنتجات */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md bg-card">
-          <DialogHeader><DialogTitle>{editingProduct ? "Edit Product" : "Add Product"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingProduct ? "تعديل المنتج" : "إضافة منتج جديد"}</DialogTitle></DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); saveMutation.mutate(); }} className="space-y-4">
             <div className="space-y-2">
-              <Label>Title</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
+              <Label>اسم المنتج</Label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="مثلاً: سماعات لاسلكية" required />
+            </div>
+            <div className="space-y-2">
+              <Label>الوصف</Label>
+              <Textarea 
+                value={description} 
+                onChange={(e) => setDescription(e.target.value)} 
+                placeholder="تفاصيل المنتج..."
+                rows={3}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Price (DA)</Label>
+                <Label>السعر (DA)</Label>
                 <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} required />
               </div>
               <div className="space-y-2">
-                <Label>Product Code</Label>
-                <Input value={productCode} onChange={(e) => setProductCode(e.target.value)} />
+                <Label>كود المنتج</Label>
+                <div className="flex gap-2">
+                  <Input value={productCode} onChange={(e) => setProductCode(e.target.value)} className="font-mono" />
+                  <Button type="button" size="icon" variant="outline" onClick={generateRandomCode}>
+                    <RefreshCcw className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </div>
+            <div className="space-y-2">
+              <Label>صورة المنتج</Label>
+              <Input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
+            </div>
             <Button type="submit" className="w-full" disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? "Saving..." : "Save Product"}
+              {saveMutation.isPending ? "جاري الحفظ..." : "حفظ المنتج"}
             </Button>
           </form>
         </DialogContent>
@@ -279,19 +304,19 @@ const Admin = () => {
       {/* Dialog إدارة الطلبات */}
       <Dialog open={orderDialogOpen} onOpenChange={setOrderDialogOpen}>
         <DialogContent className="bg-card">
-          <DialogHeader><DialogTitle>إضافة كود طلب جديد</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>إدارة حالة الطلبات</DialogTitle></DialogHeader>
           <div className="space-y-5 py-4">
             <div className="space-y-2">
-              <Label>كود المنتج (Text)</Label>
+              <Label>كود الطلب (Text)</Label>
               <Input 
-                placeholder="#12345" 
+                placeholder="#A4DF" 
                 value={targetCode}
                 onChange={(e) => setTargetCode(e.target.value)}
                 className="font-mono"
               />
             </div>
             <div className="space-y-2">
-              <Label>الحالة</Label>
+              <Label>تغيير الحالة</Label>
               <select 
                 className="w-full h-11 px-3 rounded-md border border-input bg-background"
                 value={selectedStatus}
@@ -303,7 +328,7 @@ const Admin = () => {
               </select>
             </div>
             <Button className="w-full bg-purple-600 hover:bg-purple-700" onClick={() => updateOrderStatus(targetCode, selectedStatus)}>
-              حفظ في قاعدة البيانات
+              تأكيد وحفظ
             </Button>
           </div>
         </DialogContent>
