@@ -44,6 +44,7 @@ const translations = {
     urgencyText: "Limited quantity available!",
     trackOrder: "Track Order",
     enterProductCode: "Enter Product Code",
+    enterPhoneNumber: "Enter Phone Number", // إضافة ترجمة
     searchStatus: "Search Status",
   },
   ar: {
@@ -65,7 +66,7 @@ const translations = {
     messagePlaceholder: "أكتب أي تفاصيل أخرى هنا...",
     emailInfo: "البريد",
     phoneInfo: "الهاتف",
-    darkMode: "الوضع المدلم",
+    darkMode: "الوضع المظلم",
     lightMode: "الوضع الفاتح",
     languageLabel: "اللغة",
     announcementBar: "توصيل سريع لـ 69 ولاية - الدفع عند الاستلام!",
@@ -75,6 +76,7 @@ const translations = {
     urgencyText: "متوفر كمية محدودة فقط!",
     trackOrder: "تتبع الطلب",
     enterProductCode: "أدخل كود المنتج",
+    enterPhoneNumber: "أدخل رقم الهاتف", // إضافة ترجمة
     searchStatus: "بحث عن الحالة",
   },
 } as const;
@@ -89,6 +91,7 @@ const Index = () => {
   const [contactMessage, setContactMessage] = useState("");
   
   const [orderSearchId, setOrderSearchId] = useState("");
+  const [orderSearchPhone, setOrderSearchPhone] = useState(""); // State جديد لرقم الهاتف في التتبع
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
@@ -141,31 +144,37 @@ const Index = () => {
     window.open(`https://wa.me/213551554758?text=${encodedMessage}`, '_blank');
   };
 
+  // تعديل دالة التتبع لتشمل رقم الهاتف
   const handleTrackOrder = async () => {
-    if (!orderSearchId) {
-      toast.error(language === "ar" ? "يرجى إدخال كود المنتج" : "Please enter a product code");
+    if (!orderSearchId || !orderSearchPhone) {
+      toast.error(language === "ar" ? "يرجى إدخال الكود ورقم الهاتف" : "Please enter both code and phone number");
       return;
     }
     setIsSearching(true);
     setOrderStatus(null);
     try {
+      const formattedCode = orderSearchId.trim().startsWith('#') 
+        ? orderSearchId.trim() 
+        : `#${orderSearchId.trim()}`;
+
       const { data, error } = await (supabase
         .from('orders' as any)
         .select('status')
-        .eq('productCode', orderSearchId.trim())
+        .eq('productCode', formattedCode)
+        .eq('phone_number', orderSearchPhone.trim()) // البحث برقم الهاتف أيضاً
         .maybeSingle() as any);
 
       if (error) throw error;
       
       if (data) {
         setOrderStatus(data.status);
-        toast.success(language === "ar" ? "تم إيجاد الطلب!" : "Order Found!");
+        toast.success(language === "ar" ? "تم إيجاد طلبك!" : "Order Found!");
       } else {
-        toast.error(language === "ar" ? "الكود غير موجود" : "Code not found");
+        toast.error(language === "ar" ? "المعلومات غير متطابقة" : "Information does not match");
       }
     } catch (error: any) {
       console.error("Error tracking order:", error);
-      toast.error(error.message || (language === "ar" ? "حدث خطأ أثناء تتبع الطلب" : "An error occurred while tracking the order"));
+      toast.error(language === "ar" ? "حدث خطأ أثناء التتبع" : "Error during tracking");
     } finally {
       setIsSearching(false);
     }
@@ -206,16 +215,27 @@ const Index = () => {
                   <DialogTitle>{t.trackOrder}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
+                  {/* خانة رقم الهاتف الجديدة */}
+                  <div className="space-y-2">
+                    <Label htmlFor="orderPhone">{t.enterPhoneNumber}</Label>
+                    <Input
+                      id="orderPhone"
+                      placeholder="06XXXXXXXX"
+                      value={orderSearchPhone}
+                      onChange={(e) => setOrderSearchPhone(e.target.value)}
+                    />
+                  </div>
+                  {/* خانة كود المنتج */}
                   <div className="space-y-2">
                     <Label htmlFor="orderCode">{t.enterProductCode}</Label>
                     <Input
                       id="orderCode"
-                      placeholder="e.g. PRD-123"
+                      placeholder="e.g. #A4DF"
                       value={orderSearchId}
                       onChange={(e) => setOrderSearchId(e.target.value)}
                     />
                   </div>
-                  <Button onClick={handleTrackOrder} disabled={isSearching}>
+                  <Button onClick={handleTrackOrder} disabled={isSearching} className="bg-primary">
                     {isSearching ? "..." : t.searchStatus}
                   </Button>
                   {orderStatus && (
