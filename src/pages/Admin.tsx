@@ -27,7 +27,9 @@ const Admin = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   
+  // States الخاصة بالطلبات (Orders)
   const [targetCode, setTargetCode] = useState(""); 
+  const [targetPhone, setTargetPhone] = useState(""); // الحالة الجديدة لرقم الهاتف
   const [selectedStatus, setSelectedStatus] = useState("قيد المعالجة ⏳");
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
 
@@ -37,7 +39,6 @@ const Admin = () => {
   const [price, setPrice] = useState("");
   const [productCode, setProductCode] = useState("");
 
-  // دالة توليد كود عشوائي فريد (#75DQ)
   const generateRandomCode = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let result = "#";
@@ -47,9 +48,10 @@ const Admin = () => {
     setProductCode(result);
   };
 
-  const updateOrderStatus = async (code: string, newStatus: string) => {
-    if (!code) {
-      toast.error("يرجى إدخال كود المنتج أولاً");
+  // دالة تحديث حالة الطلب مع إضافة رقم الهاتف
+  const updateOrderStatus = async (code: string, newStatus: string, phone: string) => {
+    if (!code || !phone) {
+      toast.error("يرجى إدخال كود المنتج ورقم الهاتف معاً");
       return;
     } 
 
@@ -63,19 +65,21 @@ const Admin = () => {
         .upsert(
           { 
             productCode: formattedCode, 
-            status: newStatus 
+            status: newStatus,
+            phone_number: phone.trim() // اسم العمود في الداتابيز phone_number
           }, 
           { onConflict: 'productCode' }
         )
         .select();
 
       if (error) throw error;
-      toast.success("تم تسجيل الكود بنجاح في الداتابيز! ✅");
+      toast.success("تم تسجيل الطلب وتحديث الحالة بنجاح! ✅");
       setOrderDialogOpen(false);
       setTargetCode("");
+      setTargetPhone("");
     } catch (error: any) {
       console.error("Upsert error:", error);
-      toast.error("خطأ: تأكد من أن الكود فريد في جدول Orders");
+      toast.error("خطأ: تأكد من وجود عمود phone_number في جدول orders");
     }
   };
 
@@ -130,7 +134,6 @@ const Admin = () => {
         price: parseFloat(price),
         product_code: productCode,
         image_url: imageUrl,
-        // ملاحظة: أعمدة created_at و updated_at تدار تلقائياً بواسطة سوباباز (timestamptz)
       };
 
       if (editingProduct) {
@@ -168,7 +171,7 @@ const Admin = () => {
     setTitle("");
     setDescription("");
     setPrice("");
-    generateRandomCode(); // توليد الكود تلقائياً عند الفتح
+    generateRandomCode();
     setImageFile(null);
     setDialogOpen(true);
   };
@@ -257,7 +260,6 @@ const Admin = () => {
         )}
       </main>
 
-      {/* Dialog إضافة/تعديل المنتجات */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md bg-card">
           <DialogHeader><DialogTitle>{editingProduct ? "تعديل المنتج" : "إضافة منتج جديد"}</DialogTitle></DialogHeader>
@@ -301,11 +303,18 @@ const Admin = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog إدارة الطلبات */}
       <Dialog open={orderDialogOpen} onOpenChange={setOrderDialogOpen}>
         <DialogContent className="bg-card">
           <DialogHeader><DialogTitle>إدارة حالة الطلبات</DialogTitle></DialogHeader>
           <div className="space-y-5 py-4">
+            <div className="space-y-2">
+              <Label>رقم هاتف الزبون</Label>
+              <Input 
+                placeholder="0XXXXXXXXX" 
+                value={targetPhone}
+                onChange={(e) => setTargetPhone(e.target.value)}
+              />
+            </div>
             <div className="space-y-2">
               <Label>كود الطلب (Text)</Label>
               <Input 
@@ -327,7 +336,10 @@ const Admin = () => {
                 <option value="تم التوصيل بنجاح ✅">تم التوصيل بنجاح ✅</option>
               </select>
             </div>
-            <Button className="w-full bg-purple-600 hover:bg-purple-700" onClick={() => updateOrderStatus(targetCode, selectedStatus)}>
+            <Button 
+              className="w-full bg-purple-600 hover:bg-purple-700" 
+              onClick={() => updateOrderStatus(targetCode, selectedStatus, targetPhone)}
+            >
               تأكيد وحفظ
             </Button>
           </div>
