@@ -374,7 +374,7 @@ const Index = () => {
               <div className="space-y-4">
                  <div className="flex items-center gap-4 text-sm">
                     <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">@</div>
-                    <span>mazariadam88@gmail.com</span>
+                    <span> الايميل حاليا غير موجود </span>
                  </div>
                  <div className="flex items-center gap-4 text-sm">
                     <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
