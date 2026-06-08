@@ -61,7 +61,7 @@ export const OrderDialog = ({ product, open, onOpenChange }: OrderDialogProps) =
       ` quantity: ${quantity}`,
     ].join("\n");
 
-    const whatsappUrl = `https://wa.me/213551554758?text=${encodeURIComponent(message)}`;
+    const whatsappUrl = `https://wa.me/213540837013?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, "_blank");
 
     setName("");
